@@ -1,120 +1,138 @@
+# Enhanced Streamlit dashboard with biological context and improved interactivity
 
 import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-import plotly.express as px
 from scipy.stats import entropy
+import plotly.express as px
 
-# Load all data files
-@st.cache_data
+# Load Data
 def load_data():
     human_229e = pd.read_excel("codon_counts_per_sequence_Human_229E_CoronaVirus (1).xlsx")
     human_nl63 = pd.read_excel("codon_counts_per_sequence_Human_NL63_CoronaVirus (2).xlsx")
     cattle = pd.read_excel("codon_counts_per_sequence_cattleCoronaVirus (1).xlsx")
     dog = pd.read_excel("codon_counts_per_sequence_DogsCoronaVirus (1).xlsx")
 
-    # Add host labels
     human_229e["Host"] = "Human_229E"
     human_nl63["Host"] = "Human_NL63"
     cattle["Host"] = "Cattle"
     dog["Host"] = "Dog"
 
-    # Combine
     df = pd.concat([human_229e, human_nl63, cattle, dog], ignore_index=True)
     df.drop(columns=["Sequence ID"], inplace=True, errors="ignore")
     return df
 
 df = load_data()
 
+# Bio-themed page background
+page_bg_img = '''
+<style>
+[data-testid="stAppViewContainer"] > .main {
+background-image: url("https://www.genome.gov/sites/default/files/media/images/2020-01/codon-hero.jpg");
+background-size: cover;
+background-position: top left;
+background-repeat: no-repeat;
+background-attachment: local;
+}
+[data-testid="stSidebar"] > div:first-child {
+background-color: #F0F2F6;
+}
+</style>
+'''
+st.markdown(page_bg_img, unsafe_allow_html=True)
+
 # Sidebar
-st.sidebar.title("Navigation")
-selection = st.sidebar.radio("Go to", ["Overview", "EDA", "Correlation", "ML Results", "Entropy & PCA", "Conclusion"])
+st.sidebar.title("🧬 Codon Usage Explorer")
+page = st.sidebar.radio("Navigate to:", [
+    "🏠 Overview",
+    "📊 EDA",
+    "📈 Correlation",
+    "🧠 ML Results",
+    "🌐 Entropy & PCA",
+    "🧾 Biological Summary"
+])
 
-if selection == "Overview":
-    st.title("Codon Usage Analysis of Coronaviruses")
+if page == "🏠 Overview":
+    st.title("🧬 Coronavirus Codon Usage Dashboard")
     st.markdown("""
-    This dashboard explores codon usage in coronavirus genomes from different hosts (Human, Dog, Cattle).
+    Welcome to the **Codon Usage Explorer**, an interactive dashboard to explore how various coronaviruses use codons based on their host species.
 
-    **Goals:**
-    - Analyze codon distribution
-    - Compare entropy across viruses
-    - Visualize host-specific patterns
-    - Build ML models to classify and cluster viruses
+    **Why Codons?**  
+    Codons are 3-letter sequences that form the genetic code. Each organism (or virus) may prefer certain codons due to evolutionary adaptation to its host. This dashboard uncovers those patterns.
 
-    **Dataset:** Provided Excel files containing codon counts per genome.
+    **Hosts Studied:**
+    - Human Coronavirus 229E
+    - Human Coronavirus NL63
+    - Cattle Coronavirus
+    - Canine Coronavirus
+
+    Navigate using the sidebar to view distribution, relationships, and biological patterns in codon usage.
     """)
 
-elif selection == "EDA":
-    st.header("Exploratory Data Analysis")
-    host = st.selectbox("Select Host Group", df["Host"].unique())
-    codon = st.selectbox("Select Codon to Visualize", df.columns[:-1])
+elif page == "📊 EDA":
+    st.header("📊 Exploratory Data Analysis")
+    selected_host = st.selectbox("Choose a host:", df["Host"].unique())
+    selected_codon = st.selectbox("Select a codon:", df.columns[:-1])
 
-    filtered = df[df["Host"] == host]
+    host_data = df[df["Host"] == selected_host]
+    st.subheader(f"Distribution of codon '{selected_codon}' in {selected_host}")
     fig, ax = plt.subplots()
-    sns.histplot(filtered[codon], kde=True, ax=ax)
-    ax.set_title(f"Distribution of {codon} in {host}")
+    sns.histplot(host_data[selected_codon], kde=True, ax=ax)
     st.pyplot(fig)
 
-elif selection == "Correlation":
-    st.header("Codon Correlation Heatmap")
-    selected_host = st.selectbox("Choose a Host for Heatmap", ["All Combined"] + list(df["Host"].unique()))
-    if selected_host == "All Combined":
-        temp = df.copy()
-    else:
-        temp = df[df["Host"] == selected_host]
-    features = temp.drop(columns=["Host"])
-    norm = features.div(features.sum(axis=1), axis=0)
-    corr = norm.corr()
+elif page == "📈 Correlation":
+    st.header("📈 Codon Correlation Heatmap")
+    selected = st.selectbox("Host-specific correlation", ["All Combined"] + list(df["Host"].unique()))
+    sub_df = df if selected == "All Combined" else df[df["Host"] == selected]
+    codon_data = sub_df.drop(columns="Host")
+    codon_freq = codon_data.div(codon_data.sum(axis=1), axis=0)
+    corr_matrix = codon_freq.corr()
 
-    fig, ax = plt.subplots(figsize=(16, 10))
-    sns.heatmap(corr, cmap="coolwarm", ax=ax)
+    st.subheader(f"Codon Correlation Heatmap - {selected}")
+    fig, ax = plt.subplots(figsize=(14, 10))
+    sns.heatmap(corr_matrix, cmap="coolwarm", ax=ax)
     st.pyplot(fig)
 
-elif selection == "ML Results":
-    st.header("Model Performance Summary")
-    st.markdown("""
-    - **Regression**: Entropy prediction using codons.
-    - **Classification**: Host classification using Random Forest.
-    - **Clustering**: KMeans applied to normalized codons.
+elif page == "🧠 ML Results":
+    st.header("🧠 Model Summary (from notebook results)")
+    st.success("Entropy predicted from codons using Linear Regression (MSE: 0.0036)")
+    st.success("Random Forest Classification Accuracy: 93% (4 host classes)")
+    st.info("KMeans Clustering produced 4 distinct clusters with silhouette score: 0.62")
+    st.markdown("Visuals are available in the PCA section.")
 
-    *All training and evaluation is handled in Colab. This section presents final metrics.*
-
-    **Regression MSE:** 0.0036  
-    **Classification Accuracy:** 93%  
-    **Clustering Silhouette Score:** 0.62
-    """)
-
-elif selection == "Entropy & PCA":
-    st.header("Entropy vs Host")
-    features = df.drop(columns=["Host"])
-    norm = features.div(features.sum(axis=1), axis=0)
-    df["Entropy"] = norm.apply(lambda row: entropy(row + 1e-8), axis=1)
+elif page == "🌐 Entropy & PCA":
+    st.header("🌐 Entropy and Codon Usage Diversity")
+    codon_data = df.drop(columns="Host")
+    codon_freq = codon_data.div(codon_data.sum(axis=1), axis=0)
+    df["Entropy"] = codon_freq.apply(lambda row: entropy(row + 1e-8), axis=1)
 
     fig, ax = plt.subplots()
     sns.boxplot(data=df, x="Host", y="Entropy", ax=ax)
+    st.subheader("Entropy across Hosts")
     st.pyplot(fig)
 
-    st.subheader("PCA Visualization")
-    pca = PCA(n_components=2)
-    pcs = pca.fit_transform(norm)
+    st.subheader("PCA of Codon Usage")
+    pca_model = PCA(n_components=2)
+    pcs = pca_model.fit_transform(codon_freq)
     pca_df = pd.DataFrame(pcs, columns=["PC1", "PC2"])
-    pca_df["Host"] = df["Host"].values
-    fig = px.scatter(pca_df, x="PC1", y="PC2", color="Host", title="PCA of Codon Usage")
-    st.plotly_chart(fig)
+    pca_df["Host"] = df["Host"]
+    fig2 = px.scatter(pca_df, x="PC1", y="PC2", color="Host", title="PCA Plot")
+    st.plotly_chart(fig2)
 
-elif selection == "Conclusion":
-    st.title("Insights and Conclusions")
+elif page == "🧾 Biological Summary":
+    st.title("🧾 Final Insights")
     st.markdown("""
-    ✅ Codon usage patterns are highly host-specific.
+    **🧠 Biological Takeaways:**
+    - Viruses adapt codon usage to match their host's tRNA availability.
+    - Entropy reveals which viruses optimize or diversify codons.
+    - Codon preferences reflect evolutionary pressure and host-specific tuning.
 
-    ✅ Entropy varies significantly between human and animal viruses.
+    **🧬 ML Learnings:**
+    - Host classification from codons is highly accurate.
+    - Entropy is predictable from codon patterns.
+    - PCA shows separation between virus groups.
 
-    ✅ PCA and clustering show that codon usage forms distinct biological clusters.
-
-    ✅ Classification models can successfully predict host species using only codon frequencies.
-
-    ✅ This dashboard offers interactive views for exploring viral codon behavior and ML findings.
+    This dashboard combines bioinformatics with AI to explore viral adaptation.
     """)
