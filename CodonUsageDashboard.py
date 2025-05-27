@@ -37,7 +37,7 @@ background-repeat: no-repeat;
 background-attachment: local;
 }
 [data-testid="stSidebar"] > div:first-child {
-background-color: #F0F2F6;
+background-color: #000000;
 }
 </style>
 '''
